@@ -613,7 +613,8 @@ bool Session::initialize(QQuickWindow* qtWindow)
             // Check if this display has a notch (safeArea != desktopMode)
             if (desktopMode.h != safeArea.h || desktopMode.w != safeArea.w) {
                 // Check if we're trying to stream at the full native resolution (including notch)
-                if (m_Preferences->width == desktopMode.w && m_Preferences->height == desktopMode.h) {
+                if (m_Preferences->autoResolution ||
+                        (m_Preferences->width == desktopMode.w && m_Preferences->height == desktopMode.h)) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Overriding default fullscreen mode for native fullscreen resolution");
                     shouldUseFullScreenSpaces = false;
@@ -659,6 +660,29 @@ bool Session::initialize(QQuickWindow* qtWindow)
     m_StreamConfig.width = m_Preferences->width;
     m_StreamConfig.height = m_Preferences->height;
 
+    // If auto resolution is enabled, stream at the native resolution
+    // of the display that the Qt UI is currently on.
+    bool autoResolutionApplied = false;
+    if (m_Preferences->autoResolution) {
+        SDL_DisplayMode nativeMode;
+        SDL_Rect safeArea;
+        int displayIndex = getQtWindowDisplayIndex();
+        if (StreamUtils::getNativeDesktopMode(displayIndex, &nativeMode, &safeArea) &&
+                nativeMode.w > 0 && nativeMode.h > 0) {
+            m_StreamConfig.width = nativeMode.w;
+            m_StreamConfig.height = nativeMode.h;
+            autoResolutionApplied = true;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Auto resolution selected %dx%d from display %d",
+                        nativeMode.w, nativeMode.h, displayIndex);
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Failed to determine native resolution for display %d; using %dx%d",
+                        displayIndex, m_StreamConfig.width, m_StreamConfig.height);
+        }
+    }
+
     int x, y, width, height;
     getWindowDimensions(x, y, width, height);
 
@@ -680,6 +704,14 @@ bool Session::initialize(QQuickWindow* qtWindow)
 
     m_StreamConfig.fps = m_Preferences->fps;
     m_StreamConfig.bitrate = m_Preferences->bitrateKbps;
+    if (autoResolutionApplied && m_Preferences->autoAdjustBitrate &&
+            (m_StreamConfig.width != m_Preferences->width || m_StreamConfig.height != m_Preferences->height)) {
+        // The saved bitrate was computed for a different resolution
+        m_StreamConfig.bitrate = StreamingPreferences::getDefaultBitrate(m_StreamConfig.width,
+                                                                         m_StreamConfig.height,
+                                                                         m_StreamConfig.fps,
+                                                                         m_Preferences->enableYUV444);
+    }
 
 #ifndef STEAM_LINK
     // Opt-in to all encryption features if we detect that the platform
@@ -1314,10 +1346,52 @@ private:
     Session* m_Session;
 };
 
+int Session::getQtWindowDisplayIndex()
+{
+    int displayIndex = 0;
+
+    Q_ASSERT(m_QtWindow != nullptr);
+    if (m_QtWindow != nullptr) {
+        QScreen* screen = m_QtWindow->screen();
+        if (screen != nullptr) {
+            QRect displayRect = screen->geometry();
+
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Qt UI screen is at (%d,%d)",
+                        displayRect.x(), displayRect.y());
+            for (int i = 0; i < SDL_GetNumVideoDisplays(); i++) {
+                SDL_Rect displayBounds;
+
+                if (SDL_GetDisplayBounds(i, &displayBounds) == 0) {
+                    if (displayBounds.x == displayRect.x() &&
+                        displayBounds.y == displayRect.y()) {
+                        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                    "SDL found matching display %d",
+                                    i);
+                        displayIndex = i;
+                        break;
+                    }
+                }
+                else {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "SDL_GetDisplayBounds(%d) failed: %s",
+                                i, SDL_GetError());
+                }
+            }
+        }
+        else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Qt window is not associated with a QScreen!");
+        }
+    }
+
+    return displayIndex;
+}
+
 void Session::getWindowDimensions(int& x, int& y,
                                   int& width, int& height)
 {
-    int displayIndex = 0;
+    int displayIndex;
 
     if (m_Window != nullptr) {
         displayIndex = SDL_GetWindowDisplayIndex(m_Window);
@@ -1326,40 +1400,7 @@ void Session::getWindowDimensions(int& x, int& y,
     // Create our window on the same display that Qt's UI
     // was being displayed on.
     else {
-        Q_ASSERT(m_QtWindow != nullptr);
-        if (m_QtWindow != nullptr) {
-            QScreen* screen = m_QtWindow->screen();
-            if (screen != nullptr) {
-                QRect displayRect = screen->geometry();
-
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                            "Qt UI screen is at (%d,%d)",
-                            displayRect.x(), displayRect.y());
-                for (int i = 0; i < SDL_GetNumVideoDisplays(); i++) {
-                    SDL_Rect displayBounds;
-
-                    if (SDL_GetDisplayBounds(i, &displayBounds) == 0) {
-                        if (displayBounds.x == displayRect.x() &&
-                            displayBounds.y == displayRect.y()) {
-                            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                                        "SDL found matching display %d",
-                                        i);
-                            displayIndex = i;
-                            break;
-                        }
-                    }
-                    else {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                    "SDL_GetDisplayBounds(%d) failed: %s",
-                                    i, SDL_GetError());
-                    }
-                }
-            }
-            else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "Qt window is not associated with a QScreen!");
-            }
-        }
+        displayIndex = getQtWindowDisplayIndex();
     }
 
     // Get the usable display bounds

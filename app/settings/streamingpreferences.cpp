@@ -13,6 +13,7 @@
 #define SER_STREAMSETTINGS "streamsettings"
 #define SER_WIDTH "width"
 #define SER_HEIGHT "height"
+#define SER_AUTORESOLUTION "autoresolution"
 #define SER_FPS "fps"
 #define SER_BITRATE "bitrate"
 #define SER_UNLOCK_BITRATE "unlockbitrate"
@@ -126,6 +127,7 @@ void StreamingPreferences::reload()
 
     width = settings.value(SER_WIDTH, 1920).toInt();
     height = settings.value(SER_HEIGHT, 1080).toInt();
+    autoResolution = settings.value(SER_AUTORESOLUTION, false).toBool();
     fps = settings.value(SER_FPS, 60).toInt();
     enableYUV444 = settings.value(SER_YUV444, false).toBool();
     bitrateKbps = settings.value(SER_BITRATE, getDefaultBitrate(width, height, fps, enableYUV444)).toInt();
@@ -329,6 +331,7 @@ void StreamingPreferences::save()
 
     settings.setValue(SER_WIDTH, width);
     settings.setValue(SER_HEIGHT, height);
+    settings.setValue(SER_AUTORESOLUTION, autoResolution);
     settings.setValue(SER_FPS, fps);
     settings.setValue(SER_BITRATE, bitrateKbps);
     settings.setValue(SER_UNLOCK_BITRATE, unlockBitrate);

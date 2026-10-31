@@ -9,13 +9,21 @@
 #include <QDir>
 #include <QGuiApplication>
 
+#ifdef Q_OS_DARWIN
+#include "macscroll.h"
+#endif
+
 SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, int streamHeight)
     : m_MultiController(prefs.multiController),
       m_GamepadMouse(prefs.gamepadMouse),
       m_SwapMouseButtons(prefs.swapMouseButtons),
       m_ReverseScrollDirection(prefs.reverseScrollDirection),
       m_SwapFaceButtons(prefs.swapFaceButtons),
+#ifdef Q_OS_DARWIN
       m_ScrollScale(prefs.scaleScroll ? prefs.scrollScale / 100.0f : 1.0f),
+#else
+      m_ScrollScale(1.0f), // Scroll scaling is only for macOS trackpads
+#endif
       m_ScrollRemainder{},
       m_MouseWasInVideoRegion(false),
       m_PendingMouseButtonsAllUpOnVideoRegionLeave(false),
@@ -216,10 +224,18 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
     SDL_zero(m_LastTouchDownEvent);
     SDL_zero(m_LastTouchUpEvent);
     SDL_zero(m_TouchDownEvent);
+
+#ifdef Q_OS_DARWIN
+    m_ScrollMonitor = m_ScrollScale != 1.0f ? MacScroll_StartMonitor() : nullptr;
+#endif
 }
 
 SdlInputHandler::~SdlInputHandler()
 {
+#ifdef Q_OS_DARWIN
+    MacScroll_StopMonitor(m_ScrollMonitor);
+#endif
+
     for (int i = 0; i < MAX_GAMEPADS; i++) {
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
             Session::get()->notifyMouseEmulationMode(false);

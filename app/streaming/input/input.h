@@ -211,8 +211,11 @@ private:
     bool m_SwapMouseButtons;
     bool m_ReverseScrollDirection;
     bool m_SwapFaceButtons;
-    float m_ScrollScale; // 1 unless scroll scaling is enabled
+    float m_ScrollScale; // 1 unless trackpad scroll scaling is enabled
     float m_ScrollRemainder[2]; // wheel units not yet sent, Y and X
+#ifdef Q_OS_DARWIN
+    void* m_ScrollMonitor; // only running while scroll scaling is enabled
+#endif
 
     bool m_NeedsManualCaptureOnLeave;
     bool m_MouseWasInVideoRegion;

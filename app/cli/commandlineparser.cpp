@@ -384,6 +384,7 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     bool displaySet = !resoOptions.isEmpty();
     if (displaySet) {
         QString name = resoOptions.last();
+        preferences->autoResolution = false;
         if (name == "720") {
             preferences->width  = 1280;
             preferences->height = 720;

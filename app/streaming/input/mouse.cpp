@@ -5,6 +5,10 @@
 #include "SDL_compat.h"
 #include "streaming/streamutils.h"
 
+#ifdef Q_OS_DARWIN
+#include "macscroll.h"
+#endif
+
 void SdlInputHandler::notifyMouseLeave()
 {
     if (m_NeedsManualCaptureOnLeave) {
@@ -181,11 +185,19 @@ void SdlInputHandler::handleMouseMotionEvent(SDL_MouseMotionEvent* event)
 
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 // Converts a precise scroll delta to wheel units, scaled by the scroll speed
-// setting. Fractions of a unit carry over to the next event, so slow scrolls
-// at a low speed still add up instead of being rounded away.
+// setting if it came from a trackpad. Fractions of a unit carry over to the
+// next event, so slow scrolls at a low speed still add up instead of being
+// rounded away.
 short SdlInputHandler::scaleScrollDelta(float precise, float& remainder)
 {
-    float units = precise * 120 * m_ScrollScale; // WHEEL_DELTA
+    float scale = 1.0f;
+#ifdef Q_OS_DARWIN
+    if (m_ScrollMonitor != nullptr && MacScroll_LastEventWasPrecise()) {
+        scale = m_ScrollScale;
+    }
+#endif
+
+    float units = precise * 120 * scale; // WHEEL_DELTA
 
     if (remainder * units < 0) {
         // Direction reversed, so drop what was left over

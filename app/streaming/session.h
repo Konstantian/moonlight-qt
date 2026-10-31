@@ -162,6 +162,8 @@ private:
 
     int getAudioRendererCapabilities(int audioConfiguration);
 
+    int getQtWindowDisplayIndex();
+
     void getWindowDimensions(int& x, int& y,
                              int& width, int& height);
 

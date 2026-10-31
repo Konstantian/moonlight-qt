@@ -157,7 +157,8 @@ Flickable {
                                                                "text": friendlyNamePrefix+" ("+rect.width+"x"+rect.height+")",
                                                                "video_width": ""+rect.width,
                                                                "video_height": ""+rect.height,
-                                                               "is_custom": false
+                                                               "is_custom": false,
+                                                               "is_auto": false
                                                            })
                             }
                         }
@@ -197,12 +198,36 @@ Flickable {
                                 }
                             }
 
+                            // Add the auto option, which uses the native resolution of whichever
+                            // display the stream starts on. The primary display's native resolution
+                            // is stored as a placeholder for bitrate calculations.
+                            var primaryRect = SystemProperties.getNativeResolution(0)
+                            if (primaryRect.width > 0 && primaryRect.height > 0 &&
+                                    (max_pixels <= 0 || primaryRect.width * primaryRect.height <= max_pixels)) {
+                                resolutionListModel.insert(0,
+                                                           {
+                                                               "text": qsTr("Auto (Current Display)"),
+                                                               "video_width": ""+primaryRect.width,
+                                                               "video_height": ""+primaryRect.height,
+                                                               "is_custom": false,
+                                                               "is_auto": true
+                                                           })
+                            }
+
                             // load the saved width/height, and iterate through the ComboBox until a match is found
                             // and set it to that index.
                             var saved_width = StreamingPreferences.width
                             var saved_height = StreamingPreferences.height
                             var index_set = false
-                            for (var i = 0; i < resolutionListModel.count; i++) {
+                            if (StreamingPreferences.autoResolution && resolutionListModel.get(0).is_auto) {
+                                currentIndex = 0
+                                index_set = true
+                            }
+                            for (var i = 0; !index_set && i < resolutionListModel.count; i++) {
+                                if (resolutionListModel.get(i).is_auto) {
+                                    continue
+                                }
+
                                 var el_width = parseInt(resolutionListModel.get(i).video_width);
                                 var el_height = parseInt(resolutionListModel.get(i).video_height);
 
@@ -219,7 +244,8 @@ Flickable {
                                                                "text": qsTr("Custom")+" ("+StreamingPreferences.width+"x"+StreamingPreferences.height+")",
                                                                "video_width": ""+StreamingPreferences.width,
                                                                "video_height": ""+StreamingPreferences.height,
-                                                               "is_custom": true
+                                                               "is_custom": true,
+                                                               "is_auto": false
                                                            })
                                 currentIndex = resolutionListModel.count - 1
                             }
@@ -228,7 +254,8 @@ Flickable {
                                                                "text": qsTr("Custom"),
                                                                "video_width": "",
                                                                "video_height": "",
-                                                               "is_custom": true
+                                                               "is_custom": true,
+                                                               "is_auto": false
                                                            })
                             }
 
@@ -251,30 +278,36 @@ Flickable {
                                 video_width: "1280"
                                 video_height: "720"
                                 is_custom: false
+                                is_auto: false
                             }
                             ListElement {
                                 text: qsTr("1080p")
                                 video_width: "1920"
                                 video_height: "1080"
                                 is_custom: false
+                                is_auto: false
                             }
                             ListElement {
                                 text: qsTr("1440p")
                                 video_width: "2560"
                                 video_height: "1440"
                                 is_custom: false
+                                is_auto: false
                             }
                             ListElement {
                                 text: qsTr("4K")
                                 video_width: "3840"
                                 video_height: "2160"
                                 is_custom: false
+                                is_auto: false
                             }
                         }
 
                         function updateBitrateForSelection() {
                             var selectedWidth = parseInt(resolutionListModel.get(currentIndex).video_width)
                             var selectedHeight = parseInt(resolutionListModel.get(currentIndex).video_height)
+
+                            StreamingPreferences.autoResolution = resolutionListModel.get(currentIndex).is_auto
 
                             // Only modify the bitrate if the values actually changed
                             if (StreamingPreferences.width !== selectedWidth || StreamingPreferences.height !== selectedHeight) {
@@ -1465,9 +1498,10 @@ Flickable {
 
                 CheckBox {
                     id: scaleScrollCheck
+                    visible: SystemProperties.isDarwin
                     hoverEnabled: true
                     width: parent.width
-                    text: qsTr("Scale down scrolling speed")
+                    text: qsTr("Scale down trackpad scrolling speed")
                     font.pointSize: 12
                     checked: StreamingPreferences.scaleScroll
                     onCheckedChanged: {
@@ -1477,13 +1511,13 @@ Flickable {
                     ToolTip.delay: 1000
                     ToolTip.timeout: 5000
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Multiplies every scroll event sent to the host by the speed below. Use it when trackpad scrolling travels too far on the host.")
+                    ToolTip.text: qsTr("Multiplies trackpad scroll events sent to the host by the speed below. Use it when trackpad scrolling travels too far on the host. Mouse wheels are not affected.")
                 }
 
                 Row {
                     width: parent.width
                     spacing: 5
-                    visible: scaleScrollCheck.checked
+                    visible: scaleScrollCheck.visible && scaleScrollCheck.checked
 
                     Slider {
                         id: scrollScaleSlider
