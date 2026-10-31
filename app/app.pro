@@ -408,7 +408,6 @@ macx {
     message(VideoToolbox renderer selected)
 
     SOURCES += \
-        streaming/input/macgestures.mm \
         streaming/video/ffmpeg-renderers/vt_base.mm \
         streaming/video/ffmpeg-renderers/vt_avsamplelayer.mm \
         streaming/video/ffmpeg-renderers/vt_metal.mm
